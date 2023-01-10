@@ -13,6 +13,7 @@ RUN apt-get update && \
     git  \
     python3 \
     python3-pip \
+    python-is-python3 \
     curl \ 
     npm && \
     rm -rf /var/lib/apt/lists/*
@@ -37,8 +38,8 @@ RUN mkdir wheels && \
     mkdir wheels/jupyterlab
 
 WORKDIR notebook
-RUN pip wheel --wheel-dir=../wheels/notebook -r requirements.txt -q .
-#RUN python3 setup.py bdist_wheel --dist-dir ../wheels/notebook
+RUN pip install -q .
+RUN pip wheel --wheel-dir=../wheels/notebook notebook
 
 ## Stage 3
 FROM download_notebook as build
@@ -47,8 +48,14 @@ RUN git clone https://github.com/tainella/jupyterlab
 
 WORKDIR jupyterlab
 
-RUN pip wheel --wheel-dir=../wheels/jupyterlab -r requirements.txt -e .
-#RUN python3 setup.py bdist_wheel --dist-dir ../wheels/jupyterlab
+RUN pip install -e .
+
+RUN jlpm install && \
+    jlpm run build
+
+RUN jupyter lab build
+
+RUN pip wheel --wheel-dir=../wheels/jupyterlab jupyterlab
 
 ## Stage 4
 FROM nvidia/cuda:11.5.1-base-ubuntu20.04
@@ -67,28 +74,13 @@ RUN apt-get update && \
     git  \
     python3 \
     python3-pip \
+    python-is-python3 \
     curl \ 
     npm && \
     rm -rf /var/lib/apt/lists/*
 
-RUN apt install -y curl
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh  \
-    | bash
-
-RUN . "$NVM_DIR/nvm.sh" && \ 
-    nvm install ${NODE_VERSION} && \
-    nvm use v${NODE_VERSION} && \
-    nvm alias default v${NODE_VERSION}
-
-RUN npm install -g bower
-
 RUN pip install --find-links /wheels/notebook notebook
 RUN pip install --find-links /wheels/jupyterlab jupyterlab 
-
-RUN jlpm install && \
-    jlpm run build
-
-RUN jupyter lab build
 
 EXPOSE 8888
 
